@@ -1,0 +1,1126 @@
+--[[
+VEXORA | PROJECT REAL
+Safe Roblox Studio developer/debug panel
+Version: 1.0
+
+IMPORTANT:
+- This is a legitimate LocalScript for an experience you own or are authorized to develop.
+- Place it in StarterPlayer > StarterPlayerScripts.
+- It does NOT inject into other games or use executor APIs.
+- It does NOT include ESP/wallhacks, aimlock, noclip, speed/jump exploits,
+  arbitrary loadstring execution, anti-cheat bypasses, or unauthorized player manipulation.
+- Server-authoritative admin actions should be implemented separately in ServerScriptService
+  with permission checks. Never trust a client-side GUI for admin authorization.
+
+Included:
+Part 1: Responsive mobile-first interface, draggable window, open/close control,
+        splash intro, tabs, theme system, notifications, basic telemetry.
+Part 2: Dashboard, safe local camera FOV setting, and developer-only UI preferences.
+Part 3: Visuals/Players/Library/Console placeholder tabs for legitimate in-game tools.
+Component Factory: CreateTab, CreateSection, CreateToggle, CreateSlider,
+                   CreateDropdown, CreateButton, CreateKeybind, CreateColorPicker.
+Connection cleanup: scoped connections, widget destruction, full teardown.
+]]
+
+--// SERVICES
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local Stats = game:GetService("Stats")
+local MarketplaceService = game:GetService("MarketplaceService")
+
+local LocalPlayer = Players.LocalPlayer
+local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+
+--// CONFIG
+local CONFIG = {
+    Title = "VEXORA",
+    Subtitle = "PROJECT REAL",
+    ToggleKey = Enum.KeyCode.RightShift,
+    DefaultTheme = "Midnight",
+    WindowSize = UDim2.fromOffset(680, 440),
+    MinWindowSize = Vector2.new(320, 300),
+}
+
+--// THEMES
+local Themes = {
+    Midnight = {
+        Background = Color3.fromRGB(15, 17, 25),
+        Surface = Color3.fromRGB(23, 26, 37),
+        Surface2 = Color3.fromRGB(31, 35, 49),
+        Text = Color3.fromRGB(240, 242, 250),
+        Muted = Color3.fromRGB(145, 152, 172),
+        Accent = Color3.fromRGB(126, 105, 255),
+        Border = Color3.fromRGB(55, 60, 80),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Ocean = {
+        Background = Color3.fromRGB(10, 22, 31),
+        Surface = Color3.fromRGB(16, 34, 47),
+        Surface2 = Color3.fromRGB(24, 47, 63),
+        Text = Color3.fromRGB(235, 247, 252),
+        Muted = Color3.fromRGB(139, 174, 190),
+        Accent = Color3.fromRGB(45, 185, 220),
+        Border = Color3.fromRGB(43, 77, 94),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Emerald = {
+        Background = Color3.fromRGB(13, 24, 20),
+        Surface = Color3.fromRGB(21, 37, 30),
+        Surface2 = Color3.fromRGB(29, 49, 39),
+        Text = Color3.fromRGB(239, 248, 241),
+        Muted = Color3.fromRGB(150, 178, 158),
+        Accent = Color3.fromRGB(65, 190, 125),
+        Border = Color3.fromRGB(53, 83, 65),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Rose = {
+        Background = Color3.fromRGB(29, 17, 25),
+        Surface = Color3.fromRGB(44, 25, 37),
+        Surface2 = Color3.fromRGB(58, 33, 49),
+        Text = Color3.fromRGB(252, 239, 247),
+        Muted = Color3.fromRGB(190, 150, 174),
+        Accent = Color3.fromRGB(235, 105, 170),
+        Border = Color3.fromRGB(91, 55, 77),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Amber = {
+        Background = Color3.fromRGB(29, 23, 14),
+        Surface = Color3.fromRGB(45, 35, 20),
+        Surface2 = Color3.fromRGB(59, 46, 26),
+        Text = Color3.fromRGB(252, 246, 232),
+        Muted = Color3.fromRGB(190, 171, 135),
+        Accent = Color3.fromRGB(235, 170, 65),
+        Border = Color3.fromRGB(91, 72, 42),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Violet = {
+        Background = Color3.fromRGB(22, 16, 34),
+        Surface = Color3.fromRGB(34, 25, 51),
+        Surface2 = Color3.fromRGB(46, 34, 68),
+        Text = Color3.fromRGB(245, 239, 255),
+        Muted = Color3.fromRGB(174, 157, 201),
+        Accent = Color3.fromRGB(169, 115, 255),
+        Border = Color3.fromRGB(75, 57, 105),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Graphite = {
+        Background = Color3.fromRGB(19, 20, 22),
+        Surface = Color3.fromRGB(30, 32, 35),
+        Surface2 = Color3.fromRGB(42, 45, 49),
+        Text = Color3.fromRGB(244, 245, 246),
+        Muted = Color3.fromRGB(160, 164, 170),
+        Accent = Color3.fromRGB(160, 175, 195),
+        Border = Color3.fromRGB(65, 68, 73),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+    Crimson = {
+        Background = Color3.fromRGB(29, 15, 18),
+        Surface = Color3.fromRGB(45, 22, 27),
+        Surface2 = Color3.fromRGB(59, 29, 36),
+        Text = Color3.fromRGB(255, 240, 241),
+        Muted = Color3.fromRGB(192, 148, 154),
+        Accent = Color3.fromRGB(225, 75, 95),
+        Border = Color3.fromRGB(91, 48, 56),
+        Good = Color3.fromRGB(70, 200, 140),
+        Bad = Color3.fromRGB(235, 90, 105),
+    },
+}
+
+--// STATE + CLEANUP MANAGER
+local Vexora = {
+    Connections = {},
+    CleanupTasks = {},
+    Tabs = {},
+    Widgets = {},
+    ThemeName = CONFIG.DefaultTheme,
+    Theme = Themes[CONFIG.DefaultTheme],
+    ActiveTab = nil,
+    Destroyed = false,
+}
+
+function Vexora:Connect(signal, callback, scope)
+    if self.Destroyed then return nil end
+    local connection = signal:Connect(callback)
+    local bucket = scope or self.Connections
+    table.insert(bucket, connection)
+    return connection
+end
+
+function Vexora:AddCleanup(callback)
+    if typeof(callback) == "function" then
+        table.insert(self.CleanupTasks, callback)
+    end
+end
+
+function Vexora:DisconnectBucket(bucket)
+    for i = #bucket, 1, -1 do
+        local connection = bucket[i]
+        if typeof(connection) == "RBXScriptConnection" then
+            pcall(function() connection:Disconnect() end)
+        end
+        bucket[i] = nil
+    end
+end
+
+function Vexora:DisconnectAll()
+    self:DisconnectBucket(self.Connections)
+    for _, widget in ipairs(self.Widgets) do
+        if widget and widget.Destroy then
+            pcall(function() widget:Destroy() end)
+        end
+    end
+    table.clear(self.Widgets)
+    for i = #self.CleanupTasks, 1, -1 do
+        pcall(self.CleanupTasks[i])
+        self.CleanupTasks[i] = nil
+    end
+end
+
+--// UI HELPERS
+local function create(className, props, parent)
+    local object = Instance.new(className)
+    for key, value in pairs(props or {}) do
+        object[key] = value
+    end
+    object.Parent = parent
+    return object
+end
+
+local function corner(parent, radius)
+    return create("UICorner", { CornerRadius = UDim.new(0, radius or 10) }, parent)
+end
+
+local function stroke(parent, color, transparency)
+    return create("UIStroke", {
+        Color = color or Vexora.Theme.Border,
+        Transparency = transparency or 0,
+        Thickness = 1,
+    }, parent)
+end
+
+local function tween(object, duration, properties)
+    local info = TweenInfo.new(duration or 0.2, Enum.EasingStyle.Quart, Enum.EasingDirection.Out)
+    local animation = TweenService:Create(object, info, properties)
+    animation:Play()
+    return animation
+end
+
+local function makeLabel(parent, text, size, color, font)
+    return create("TextLabel", {
+        BackgroundTransparency = 1,
+        Text = text or "",
+        TextColor3 = color or Vexora.Theme.Text,
+        TextSize = size or 14,
+        Font = font or Enum.Font.Gotham,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        TextYAlignment = Enum.TextYAlignment.Center,
+        Size = UDim2.new(1, 0, 0, 22),
+    }, parent)
+end
+
+--// ROOT GUI
+local oldGui = PlayerGui:FindFirstChild("VexoraProjectReal")
+if oldGui then oldGui:Destroy() end
+
+local ScreenGui = create("ScreenGui", {
+    Name = "VexoraProjectReal",
+    ResetOnSpawn = false,
+    IgnoreGuiInset = true,
+    ZIndexBehavior = Enum.ZIndexBehavior.Sibling,
+}, PlayerGui)
+
+local Main = create("Frame", {
+    Name = "Main",
+    AnchorPoint = Vector2.new(0.5, 0.5),
+    Position = UDim2.fromScale(0.5, 0.5),
+    Size = CONFIG.WindowSize,
+    BackgroundColor3 = Vexora.Theme.Background,
+    BorderSizePixel = 0,
+    Visible = false,
+}, ScreenGui)
+corner(Main, 16)
+stroke(Main, Vexora.Theme.Border)
+
+local MainScale = create("UIScale", { Scale = 1 }, Main)
+
+local Topbar = create("Frame", {
+    Name = "Topbar",
+    Size = UDim2.new(1, 0, 0, 54),
+    BackgroundColor3 = Vexora.Theme.Surface,
+    BorderSizePixel = 0,
+}, Main)
+corner(Topbar, 16)
+
+local Title = makeLabel(Topbar, CONFIG.Title, 17, Vexora.Theme.Text, Enum.Font.GothamBold)
+Title.Position = UDim2.fromOffset(18, 4)
+Title.Size = UDim2.new(0, 180, 0, 23)
+
+local Subtitle = makeLabel(Topbar, CONFIG.Subtitle, 9, Vexora.Theme.Muted, Enum.Font.GothamMedium)
+Subtitle.Position = UDim2.fromOffset(19, 27)
+Subtitle.Size = UDim2.new(0, 180, 0, 15)
+
+local CloseButton = create("TextButton", {
+    Name = "Close",
+    Text = "×",
+    Font = Enum.Font.GothamMedium,
+    TextSize = 25,
+    TextColor3 = Vexora.Theme.Text,
+    BackgroundColor3 = Vexora.Theme.Surface2,
+    Size = UDim2.fromOffset(36, 34),
+    Position = UDim2.new(1, -47, 0, 10),
+    AutoButtonColor = false,
+}, Topbar)
+corner(CloseButton, 10)
+
+local Sidebar = create("Frame", {
+    Name = "Sidebar",
+    Position = UDim2.fromOffset(12, 66),
+    Size = UDim2.new(0, 154, 1, -78),
+    BackgroundColor3 = Vexora.Theme.Surface,
+    BorderSizePixel = 0,
+}, Main)
+corner(Sidebar, 12)
+
+local SidebarLayout = create("UIListLayout", {
+    Padding = UDim.new(0, 6),
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, Sidebar)
+create("UIPadding", {
+    PaddingTop = UDim.new(0, 10),
+    PaddingLeft = UDim.new(0, 9),
+    PaddingRight = UDim.new(0, 9),
+}, Sidebar)
+
+local PageHost = create("Frame", {
+    Name = "PageHost",
+    Position = UDim2.new(0, 178, 0, 66),
+    Size = UDim2.new(1, -190, 1, -78),
+    BackgroundTransparency = 1,
+}, Main)
+
+local FloatingButton = create("TextButton", {
+    Name = "VexoraOpen",
+    Text = "V",
+    Font = Enum.Font.GothamBold,
+    TextSize = 18,
+    TextColor3 = Color3.new(1, 1, 1),
+    BackgroundColor3 = Vexora.Theme.Accent,
+    Size = UDim2.fromOffset(48, 48),
+    Position = UDim2.new(1, -66, 1, -78),
+    AutoButtonColor = false,
+}, ScreenGui)
+corner(FloatingButton, 24)
+
+--// RESPONSIVE SCALE
+local function updateScale()
+    local camera = workspace.CurrentCamera
+    if not camera then return end
+    local viewport = camera.ViewportSize
+    local widthScale = viewport.X / 720
+    local heightScale = viewport.Y / 500
+    MainScale.Scale = math.clamp(math.min(widthScale, heightScale), 0.62, 1)
+end
+updateScale()
+Vexora:Connect(workspace:GetPropertyChangedSignal("CurrentCamera"), updateScale)
+if workspace.CurrentCamera then
+    Vexora:Connect(workspace.CurrentCamera:GetPropertyChangedSignal("ViewportSize"), updateScale)
+end
+
+--// DRAGGING (mouse + touch)
+do
+    local dragging = false
+    local dragInput, dragStart, startPosition
+    Vexora:Connect(Topbar.InputBegan, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPosition = Main.Position
+            dragInput = input
+        end
+    end)
+    Vexora:Connect(Topbar.InputChanged, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseMovement
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragInput = input
+        end
+    end)
+    Vexora:Connect(UserInputService.InputChanged, function(input)
+        if dragging and input == dragInput then
+            local delta = input.Position - dragStart
+            Main.Position = UDim2.new(
+                startPosition.X.Scale, startPosition.X.Offset + delta.X,
+                startPosition.Y.Scale, startPosition.Y.Offset + delta.Y
+            )
+        end
+    end)
+    Vexora:Connect(UserInputService.InputEnded, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1
+            or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+--// NOTIFICATIONS
+local ToastHost = create("Frame", {
+    Name = "ToastHost",
+    AnchorPoint = Vector2.new(1, 0),
+    Position = UDim2.new(1, -16, 0, 16),
+    Size = UDim2.fromOffset(280, 240),
+    BackgroundTransparency = 1,
+}, ScreenGui)
+create("UIListLayout", {
+    Padding = UDim.new(0, 8),
+    HorizontalAlignment = Enum.HorizontalAlignment.Right,
+    SortOrder = Enum.SortOrder.LayoutOrder,
+}, ToastHost)
+
+function Vexora:Notify(message, kind)
+    if self.Destroyed then return end
+    local color = kind == "error" and self.Theme.Bad or (kind == "success" and self.Theme.Good or self.Theme.Accent)
+    local toast = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface,
+        BackgroundTransparency = 0.04,
+        Size = UDim2.new(1, 0, 0, 54),
+        ClipsDescendants = true,
+    }, ToastHost)
+    corner(toast, 10)
+    local bar = create("Frame", {
+        BackgroundColor3 = color,
+        BorderSizePixel = 0,
+        Size = UDim2.new(0, 4, 1, 0),
+    }, toast)
+    local label = makeLabel(toast, tostring(message), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(14, 5)
+    label.Size = UDim2.new(1, -22, 1, -10)
+    label.TextWrapped = true
+    toast.BackgroundTransparency = 1
+    tween(toast, 0.18, { BackgroundTransparency = 0.04 })
+    task.delay(3.2, function()
+        if toast.Parent then
+            tween(toast, 0.18, { BackgroundTransparency = 1 })
+            task.wait(0.2)
+            if toast.Parent then toast:Destroy() end
+        end
+    end)
+end
+
+--// THEME REGISTRY
+local ThemeObjects = {}
+function Vexora:RegisterThemeObject(object, property, key)
+    table.insert(ThemeObjects, { Object = object, Property = property, Key = key })
+end
+
+function Vexora:ApplyTheme(themeName)
+    local selected = Themes[themeName]
+    if not selected then
+        self:Notify("Unknown theme: " .. tostring(themeName), "error")
+        return
+    end
+    self.ThemeName = themeName
+    self.Theme = selected
+    for _, item in ipairs(ThemeObjects) do
+        if item.Object and item.Object.Parent and selected[item.Key] then
+            pcall(function()
+                item.Object[item.Property] = selected[item.Key]
+            end)
+        end
+    end
+    self:Notify("Theme changed to " .. themeName, "success")
+end
+
+Vexora:RegisterThemeObject(Main, "BackgroundColor3", "Background")
+Vexora:RegisterThemeObject(Topbar, "BackgroundColor3", "Surface")
+Vexora:RegisterThemeObject(Sidebar, "BackgroundColor3", "Surface")
+Vexora:RegisterThemeObject(Title, "TextColor3", "Text")
+Vexora:RegisterThemeObject(Subtitle, "TextColor3", "Muted")
+Vexora:RegisterThemeObject(CloseButton, "BackgroundColor3", "Surface2")
+Vexora:RegisterThemeObject(CloseButton, "TextColor3", "Text")
+Vexora:RegisterThemeObject(Sidebar, "BackgroundColor3", "Surface")
+Vexora:RegisterThemeObject(FloatingButton, "BackgroundColor3", "Accent")
+
+--// COMPONENT FACTORY
+local Factory = {}
+Factory.__index = Factory
+
+function Vexora:CreateTab(name, iconText)
+    local tabName = tostring(name)
+    if self.Tabs[tabName] then return self.Tabs[tabName] end
+
+    local button = create("TextButton", {
+        Name = tabName .. "Tab",
+        Text = (iconText and (iconText .. "  ") or "") .. tabName,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 12,
+        TextColor3 = self.Theme.Muted,
+        TextXAlignment = Enum.TextXAlignment.Left,
+        BackgroundColor3 = self.Theme.Surface,
+        Size = UDim2.new(1, 0, 0, 38),
+        AutoButtonColor = false,
+    }, Sidebar)
+    corner(button, 8)
+
+    local page = create("ScrollingFrame", {
+        Name = tabName .. "Page",
+        Size = UDim2.fromScale(1, 1),
+        BackgroundTransparency = 1,
+        BorderSizePixel = 0,
+        ScrollBarThickness = 3,
+        ScrollBarImageColor3 = self.Theme.Accent,
+        CanvasSize = UDim2.new(),
+        AutomaticCanvasSize = Enum.AutomaticSize.Y,
+        Visible = false,
+    }, PageHost)
+    create("UIListLayout", {
+        Padding = UDim.new(0, 10),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, page)
+    create("UIPadding", {
+        PaddingTop = UDim.new(0, 4),
+        PaddingLeft = UDim.new(0, 3),
+        PaddingRight = UDim.new(0, 8),
+        PaddingBottom = UDim.new(0, 10),
+    }, page)
+
+    local tab = {
+        Name = tabName,
+        Button = button,
+        Page = page,
+        Connections = {},
+        Widgets = {},
+    }
+
+    function tab:Destroy()
+        Vexora:DisconnectBucket(self.Connections)
+        for _, widget in ipairs(self.Widgets) do
+            if widget.Destroy then pcall(function() widget:Destroy() end) end
+        end
+        if self.Button then self.Button:Destroy() end
+        if self.Page then self.Page:Destroy() end
+    end
+
+    self.Tabs[tabName] = tab
+    table.insert(self.Widgets, tab)
+
+    self:Connect(button.MouseButton1Click, function()
+        self:SetActiveTab(tabName)
+    end, tab.Connections)
+
+    if not self.ActiveTab then
+        self:SetActiveTab(tabName)
+    end
+    return tab
+end
+
+function Vexora:SetActiveTab(name)
+    local tab = self.Tabs[name]
+    if not tab then return end
+    self.ActiveTab = name
+    for tabName, item in pairs(self.Tabs) do
+        local active = tabName == name
+        item.Page.Visible = active
+        tween(item.Button, 0.15, {
+            BackgroundColor3 = active and self.Theme.Accent or self.Theme.Surface,
+            TextColor3 = active and Color3.new(1, 1, 1) or self.Theme.Muted,
+        })
+    end
+end
+
+function Vexora:GetCurrentPage()
+    local tab = self.ActiveTab and self.Tabs[self.ActiveTab]
+    return tab and tab.Page
+end
+
+function Vexora:CreateSection(title)
+    local page = self:GetCurrentPage()
+    assert(page, "Create a tab before creating a section")
+    local frame = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface,
+        Size = UDim2.new(1, -4, 0, 42),
+        AutomaticSize = Enum.AutomaticSize.Y,
+    }, page)
+    corner(frame, 10)
+    stroke(frame, self.Theme.Border)
+    local heading = makeLabel(frame, tostring(title), 13, self.Theme.Accent, Enum.Font.GothamBold)
+    heading.Position = UDim2.fromOffset(12, 8)
+    heading.Size = UDim2.new(1, -24, 0, 22)
+    local body = create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(10, 34),
+        Size = UDim2.new(1, -20, 0, 0),
+        AutomaticSize = Enum.AutomaticSize.Y,
+    }, frame)
+    create("UIListLayout", {
+        Padding = UDim.new(0, 7),
+        SortOrder = Enum.SortOrder.LayoutOrder,
+    }, body)
+    create("UIPadding", { PaddingBottom = UDim.new(0, 10) }, body)
+    local section = { Frame = frame, Body = body }
+    function section:Destroy()
+        if self.Frame then self.Frame:Destroy() end
+    end
+    return section
+end
+
+local function addWidgetHandle(parent, instance, connections)
+    local handle = { Instance = instance, Connections = connections or {} }
+    function handle:Destroy()
+        Vexora:DisconnectBucket(self.Connections)
+        if self.Instance then self.Instance:Destroy() end
+    end
+    table.insert(Vexora.Widgets, handle)
+    return handle
+end
+
+function Vexora:CreateToggle(section, labelText, defaultValue, callback)
+    local value = defaultValue == true
+    local row = create("TextButton", {
+        Text = "",
+        BackgroundColor3 = self.Theme.Surface2,
+        Size = UDim2.new(1, 0, 0, 38),
+        AutoButtonColor = false,
+    }, section.Body)
+    corner(row, 8)
+    local label = makeLabel(row, tostring(labelText), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(10, 0)
+    label.Size = UDim2.new(1, -58, 1, 0)
+    local indicator = create("Frame", {
+        AnchorPoint = Vector2.new(1, 0.5),
+        Position = UDim2.new(1, -10, 0.5, 0),
+        Size = UDim2.fromOffset(34, 18),
+        BackgroundColor3 = value and self.Theme.Accent or self.Theme.Border,
+    }, row)
+    corner(indicator, 9)
+    local dot = create("Frame", {
+        Position = value and UDim2.new(1, -16, 0, 2) or UDim2.fromOffset(2, 2),
+        Size = UDim2.fromOffset(14, 14),
+        BackgroundColor3 = Color3.new(1, 1, 1),
+    }, indicator)
+    corner(dot, 7)
+    local function set(nextValue, silent)
+        value = nextValue == true
+        tween(indicator, 0.12, { BackgroundColor3 = value and self.Theme.Accent or self.Theme.Border })
+        tween(dot, 0.12, { Position = value and UDim2.new(1, -16, 0, 2) or UDim2.fromOffset(2, 2) })
+        if not silent and callback then callback(value) end
+    end
+    local connections = {}
+    self:Connect(row.MouseButton1Click, function() set(not value) end, connections)
+    local handle = addWidgetHandle(row, row, connections)
+    handle.Set = set
+    handle.Get = function() return value end
+    set(value, true)
+    return handle
+end
+
+function Vexora:CreateSlider(section, labelText, minimum, maximum, defaultValue, callback)
+    minimum, maximum = tonumber(minimum) or 0, tonumber(maximum) or 100
+    assert(maximum > minimum, "Slider maximum must be greater than minimum")
+    local value = math.clamp(tonumber(defaultValue) or minimum, minimum, maximum)
+    local frame = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface2,
+        Size = UDim2.new(1, 0, 0, 58),
+    }, section.Body)
+    corner(frame, 8)
+    local label = makeLabel(frame, tostring(labelText), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(10, 4)
+    label.Size = UDim2.new(1, -70, 0, 20)
+    local valueLabel = makeLabel(frame, tostring(value), 11, self.Theme.Accent)
+    valueLabel.TextXAlignment = Enum.TextXAlignment.Right
+    valueLabel.Position = UDim2.new(1, -55, 0, 4)
+    valueLabel.Size = UDim2.fromOffset(45, 20)
+    local track = create("Frame", {
+        Position = UDim2.new(0, 10, 0, 34),
+        Size = UDim2.new(1, -20, 0, 8),
+        BackgroundColor3 = self.Theme.Border,
+    }, frame)
+    corner(track, 5)
+    local fill = create("Frame", {
+        Size = UDim2.new((value - minimum) / (maximum - minimum), 0, 1, 0),
+        BackgroundColor3 = self.Theme.Accent,
+    }, track)
+    corner(fill, 5)
+    local dragging = false
+    local function setFromX(x, silent)
+        local alpha = math.clamp((x - track.AbsolutePosition.X) / math.max(track.AbsoluteSize.X, 1), 0, 1)
+        value = math.floor((minimum + (maximum - minimum) * alpha) * 100 + 0.5) / 100
+        fill.Size = UDim2.new(alpha, 0, 1, 0)
+        valueLabel.Text = tostring(value)
+        if not silent and callback then callback(value) end
+    end
+    local connections = {}
+    self:Connect(track.InputBegan, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            setFromX(input.Position.X)
+        end
+    end, connections)
+    self:Connect(UserInputService.InputChanged, function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            setFromX(input.Position.X)
+        end
+    end, connections)
+    self:Connect(UserInputService.InputEnded, function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end, connections)
+    local handle = addWidgetHandle(frame, frame, connections)
+    handle.Set = function(nextValue, silent)
+        value = math.clamp(tonumber(nextValue) or minimum, minimum, maximum)
+        local alpha = (value - minimum) / (maximum - minimum)
+        fill.Size = UDim2.new(alpha, 0, 1, 0)
+        valueLabel.Text = tostring(value)
+        if not silent and callback then callback(value) end
+    end
+    handle.Get = function() return value end
+    return handle
+end
+
+function Vexora:CreateDropdown(section, labelText, options, defaultValue, callback)
+    local selected = defaultValue
+    local expanded = false
+    local optionConnections = {}
+    local frame = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface2,
+        Size = UDim2.new(1, 0, 0, 40),
+        ClipsDescendants = true,
+    }, section.Body)
+    corner(frame, 8)
+    local header = create("TextButton", {
+        BackgroundTransparency = 1,
+        Text = "",
+        Size = UDim2.new(1, 0, 0, 40),
+        AutoButtonColor = false,
+    }, frame)
+    local label = makeLabel(header, tostring(labelText), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(10, 0)
+    label.Size = UDim2.new(0.48, -10, 1, 0)
+    local selectedLabel = makeLabel(header, tostring(selected or "Select"), 11, self.Theme.Accent)
+    selectedLabel.TextXAlignment = Enum.TextXAlignment.Right
+    selectedLabel.Position = UDim2.new(0.48, 0, 0, 0)
+    selectedLabel.Size = UDim2.new(0.52, -28, 1, 0)
+    local arrow = makeLabel(header, "⌄", 16, self.Theme.Muted)
+    arrow.TextXAlignment = Enum.TextXAlignment.Center
+    arrow.Position = UDim2.new(1, -28, 0, 0)
+    arrow.Size = UDim2.fromOffset(22, 40)
+    local optionsHost = create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.fromOffset(8, 42),
+        Size = UDim2.new(1, -16, 0, 0),
+    }, frame)
+    create("UIListLayout", { Padding = UDim.new(0, 4) }, optionsHost)
+
+    local function clearOptions()
+        Vexora:DisconnectBucket(optionConnections)
+        for _, child in ipairs(optionsHost:GetChildren()) do
+            if child:IsA("TextButton") then child:Destroy() end
+        end
+    end
+    local function refresh(newOptions)
+        clearOptions()
+        options = newOptions or options
+        for _, option in ipairs(options) do
+            local optionButton = create("TextButton", {
+                Text = tostring(option),
+                Font = Enum.Font.Gotham,
+                TextSize = 11,
+                TextColor3 = self.Theme.Text,
+                BackgroundColor3 = self.Theme.Surface,
+                Size = UDim2.new(1, 0, 0, 28),
+                AutoButtonColor = false,
+            }, optionsHost)
+            corner(optionButton, 6)
+            self:Connect(optionButton.MouseButton1Click, function()
+                selected = option
+                selectedLabel.Text = tostring(option)
+                expanded = false
+                frame:TweenSize(UDim2.new(1, 0, 0, 40), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.16, true)
+                if callback then callback(selected) end
+            end, optionConnections)
+        end
+    end
+    self:Connect(header.MouseButton1Click, function()
+        expanded = not expanded
+        local height = expanded and (44 + #options * 32) or 40
+        frame:TweenSize(UDim2.new(1, 0, 0, height), Enum.EasingDirection.Out, Enum.EasingStyle.Quart, 0.16, true)
+    end)
+    refresh(options or {})
+    local handle = addWidgetHandle(frame, frame, optionConnections)
+    handle.Refresh = refresh
+    handle.Get = function() return selected end
+    handle.Set = function(value, silent)
+        selected = value
+        selectedLabel.Text = tostring(value)
+        if not silent and callback then callback(value) end
+    end
+    return handle
+end
+
+function Vexora:CreateButton(section, labelText, callback)
+    local button = create("TextButton", {
+        Text = tostring(labelText),
+        Font = Enum.Font.GothamSemibold,
+        TextSize = 12,
+        TextColor3 = Color3.new(1, 1, 1),
+        BackgroundColor3 = self.Theme.Accent,
+        Size = UDim2.new(1, 0, 0, 38),
+        AutoButtonColor = false,
+    }, section.Body)
+    corner(button, 8)
+    local connections = {}
+    self:Connect(button.MouseButton1Click, function()
+        tween(button, 0.08, { BackgroundTransparency = 0.18 })
+        task.delay(0.1, function()
+            if button.Parent then tween(button, 0.12, { BackgroundTransparency = 0 }) end
+        end)
+        if callback then
+            local ok, err = pcall(callback)
+            if not ok then self:Notify("Button error: " .. tostring(err), "error") end
+        end
+    end, connections)
+    return addWidgetHandle(button, button, connections)
+end
+
+function Vexora:CreateKeybind(section, labelText, defaultKey, callback)
+    local key = defaultKey or Enum.KeyCode.Unknown
+    local listening = false
+    local row = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface2,
+        Size = UDim2.new(1, 0, 0, 38),
+    }, section.Body)
+    corner(row, 8)
+    local label = makeLabel(row, tostring(labelText), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(10, 0)
+    label.Size = UDim2.new(1, -112, 1, 0)
+    local bindButton = create("TextButton", {
+        Text = key.Name,
+        Font = Enum.Font.GothamMedium,
+        TextSize = 11,
+        TextColor3 = self.Theme.Accent,
+        BackgroundColor3 = self.Theme.Surface,
+        Size = UDim2.fromOffset(92, 26),
+        Position = UDim2.new(1, -102, 0, 6),
+        AutoButtonColor = false,
+    }, row)
+    corner(bindButton, 7)
+    local connections = {}
+    self:Connect(bindButton.MouseButton1Click, function()
+        listening = true
+        bindButton.Text = "Press key..."
+    end, connections)
+    self:Connect(UserInputService.InputBegan, function(input, processed)
+        if processed then return end
+        if listening and input.UserInputType == Enum.UserInputType.Keyboard then
+            key = input.KeyCode
+            bindButton.Text = key.Name
+            listening = false
+        elseif not listening and input.UserInputType == Enum.UserInputType.Keyboard and input.KeyCode == key then
+            if callback then callback(key) end
+        end
+    end, connections)
+    local handle = addWidgetHandle(row, row, connections)
+    handle.Get = function() return key end
+    handle.Set = function(newKey)
+        if typeof(newKey) == "EnumItem" and newKey.EnumType == Enum.KeyCode then
+            key = newKey
+            bindButton.Text = key.Name
+        end
+    end
+    return handle
+end
+
+function Vexora:CreateColorPicker(section, labelText, defaultColor, callback)
+    local color = typeof(defaultColor) == "Color3" and defaultColor or self.Theme.Accent
+    local palette = {
+        Color3.fromRGB(126, 105, 255),
+        Color3.fromRGB(45, 185, 220),
+        Color3.fromRGB(65, 190, 125),
+        Color3.fromRGB(235, 105, 170),
+        Color3.fromRGB(235, 170, 65),
+        Color3.fromRGB(225, 75, 95),
+    }
+    local row = create("Frame", {
+        BackgroundColor3 = self.Theme.Surface2,
+        Size = UDim2.new(1, 0, 0, 40),
+    }, section.Body)
+    corner(row, 8)
+    local label = makeLabel(row, tostring(labelText), 12, self.Theme.Text)
+    label.Position = UDim2.fromOffset(10, 0)
+    label.Size = UDim2.new(1, -170, 1, 0)
+    local swatches = create("Frame", {
+        BackgroundTransparency = 1,
+        Position = UDim2.new(1, -158, 0, 8),
+        Size = UDim2.fromOffset(148, 24),
+    }, row)
+    create("UIListLayout", {
+        FillDirection = Enum.FillDirection.Horizontal,
+        Padding = UDim.new(0, 5),
+    }, swatches)
+    local connections = {}
+    local function setColor(nextColor, silent)
+        if typeof(nextColor) ~= "Color3" then return end
+        color = nextColor
+        if not silent and callback then callback(color) end
+    end
+    for _, swatchColor in ipairs(palette) do
+        local swatch = create("TextButton", {
+            Text = "",
+            BackgroundColor3 = swatchColor,
+            Size = UDim2.fromOffset(20, 20),
+            AutoButtonColor = false,
+        }, swatches)
+        corner(swatch, 10)
+        self:Connect(swatch.MouseButton1Click, function() setColor(swatchColor) end, connections)
+    end
+    local handle = addWidgetHandle(row, row, connections)
+    handle.Get = function() return color end
+    handle.Set = setColor
+    return handle
+end
+
+--// GAME INFO + TELEMETRY
+local gameName = "Experience #" .. tostring(game.PlaceId)
+pcall(function()
+    local info = MarketplaceService:GetProductInfo(game.PlaceId)
+    if info and info.Name then gameName = info.Name end
+end)
+
+local function getPing()
+    local ok, result = pcall(function()
+        return Stats.Network.ServerStatsItem["Data Ping"]:GetValueString()
+    end)
+    return ok and tostring(result) or "Unavailable"
+end
+
+local fps = 0
+local frameCounter = 0
+local lastFpsUpdate = os.clock()
+Vexora:Connect(RunService.RenderStepped, function()
+    frameCounter += 1
+    local now = os.clock()
+    if now - lastFpsUpdate >= 1 then
+        fps = frameCounter
+        frameCounter = 0
+        lastFpsUpdate = now
+    end
+end)
+
+--// BUILD TABS
+local Dashboard = Vexora:CreateTab("Dashboard", "⌂")
+local Movement = Vexora:CreateTab("Movement", "↗")
+local Camera = Vexora:CreateTab("Camera", "◉")
+local Visuals = Vexora:CreateTab("Visuals", "◇")
+local PlayersTab = Vexora:CreateTab("Players", "♙")
+local Library = Vexora:CreateTab("Library", "▤")
+local Console = Vexora:CreateTab("Console", ">")
+local Settings = Vexora:CreateTab("Settings", "⚙")
+
+-- Dashboard
+Vexora:SetActiveTab("Dashboard")
+local dashInfo = Vexora:CreateSection("Experience")
+local gameLabel = makeLabel(dashInfo.Body, "Game: " .. gameName, 12, Vexora.Theme.Text)
+gameLabel.Size = UDim2.new(1, 0, 0, 24)
+local placeLabel = makeLabel(dashInfo.Body, "Place ID: " .. tostring(game.PlaceId), 11, Vexora.Theme.Muted)
+placeLabel.Size = UDim2.new(1, 0, 0, 22)
+local userLabel = makeLabel(dashInfo.Body, "Player: " .. LocalPlayer.Name, 11, Vexora.Theme.Muted)
+userLabel.Size = UDim2.new(1, 0, 0, 22)
+
+local telemetry = Vexora:CreateSection("Live telemetry")
+local fpsLabel = makeLabel(telemetry.Body, "FPS: --", 12, Vexora.Theme.Text)
+fpsLabel.Size = UDim2.new(1, 0, 0, 22)
+local pingLabel = makeLabel(telemetry.Body, "Ping: --", 12, Vexora.Theme.Text)
+pingLabel.Size = UDim2.new(1, 0, 0, 22)
+local playerCountLabel = makeLabel(telemetry.Body, "Players: --", 12, Vexora.Theme.Text)
+playerCountLabel.Size = UDim2.new(1, 0, 0, 22)
+
+Vexora:Connect(RunService.Heartbeat, function()
+    if fpsLabel.Parent then fpsLabel.Text = "FPS: " .. tostring(fps) end
+    if pingLabel.Parent then pingLabel.Text = "Ping: " .. getPing() end
+    if playerCountLabel.Parent then
+        playerCountLabel.Text = "Players: " .. #Players:GetPlayers()
+    end
+end)
+
+-- Movement: intentionally limited to safe display preferences, not movement exploits.
+Vexora:SetActiveTab("Movement")
+local movementSection = Vexora:CreateSection("Developer options")
+Vexora:CreateToggle(movementSection, "Show movement diagnostics", false, function(enabled)
+    Vexora:Notify("Movement diagnostics " .. (enabled and "enabled" or "disabled"))
+end)
+Vexora:CreateButton(movementSection, "Explain server-authoritative movement", function()
+    Vexora:Notify("Movement rules belong in server-validated game code.")
+end)
+
+-- Camera: local camera FOV is a legitimate client-side presentation setting.
+Vexora:SetActiveTab("Camera")
+local cameraSection = Vexora:CreateSection("Camera settings")
+local cameraObject = workspace.CurrentCamera
+Vexora:CreateSlider(cameraSection, "Field of view", 50, 100, cameraObject and cameraObject.FieldOfView or 70, function(value)
+    local camera = workspace.CurrentCamera
+    if camera then camera.FieldOfView = value end
+end)
+Vexora:CreateButton(cameraSection, "Reset camera FOV", function()
+    local camera = workspace.CurrentCamera
+    if camera then camera.FieldOfView = 70 end
+end)
+
+-- Visuals
+Vexora:SetActiveTab("Visuals")
+local visualSection = Vexora:CreateSection("Visual preferences")
+Vexora:CreateToggle(visualSection, "Enable experience-owned visual hints", false, function(enabled)
+    Vexora:Notify(enabled and "Visual hints enabled" or "Visual hints disabled")
+end)
+Vexora:CreateColorPicker(visualSection, "Accent preview", Vexora.Theme.Accent, function(color)
+    FloatingButton.BackgroundColor3 = color
+end)
+
+-- Players
+Vexora:SetActiveTab("Players")
+local playerSection = Vexora:CreateSection("Player information")
+local playerDropdown = Vexora:CreateDropdown(playerSection, "Select player", {}, nil, function(name)
+    Vexora:Notify("Selected player: " .. tostring(name))
+end)
+local function refreshPlayers()
+    local names = {}
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player ~= LocalPlayer then table.insert(names, player.Name) end
+    end
+    table.sort(names)
+    playerDropdown.Refresh(names)
+end
+refreshPlayers()
+Vexora:Connect(Players.PlayerAdded, refreshPlayers)
+Vexora:Connect(Players.PlayerRemoving, refreshPlayers)
+Vexora:CreateButton(playerSection, "Refresh player list", refreshPlayers)
+
+-- Library: no remote script downloading or arbitrary execution.
+Vexora:SetActiveTab("Library")
+local librarySection = Vexora:CreateSection("Project library")
+Vexora:CreateButton(librarySection, "Show library notice", function()
+    Vexora:Notify("Add trusted, experience-owned modules here.")
+end)
+
+-- Console: diagnostic messages only; deliberately no loadstring/code execution.
+Vexora:SetActiveTab("Console")
+local consoleSection = Vexora:CreateSection("Diagnostics")
+Vexora:CreateButton(consoleSection, "Print client status", function()
+    print("[VEXORA] Player:", LocalPlayer.Name, "PlaceId:", game.PlaceId, "FPS:", fps)
+    Vexora:Notify("Status printed to the developer output.", "success")
+end)
+Vexora:CreateButton(consoleSection, "Clear developer output notice", function()
+    Vexora:Notify("Use Roblox Studio Output to inspect logs.")
+end)
+
+-- Settings
+Vexora:SetActiveTab("Settings")
+local settingsSection = Vexora:CreateSection("Appearance")
+local themeNames = {}
+for name in pairs(Themes) do table.insert(themeNames, name) end
+table.sort(themeNames)
+Vexora:CreateDropdown(settingsSection, "Theme", themeNames, Vexora.ThemeName, function(name)
+    Vexora:ApplyTheme(name)
+end)
+Vexora:CreateKeybind(settingsSection, "Toggle interface key", CONFIG.ToggleKey, function()
+    Main.Visible = not Main.Visible
+end)
+Vexora:CreateButton(settingsSection, "Reset theme", function()
+    Vexora:ApplyTheme(CONFIG.DefaultTheme)
+end)
+Vexora:CreateButton(settingsSection, "Destroy Vexora UI", function()
+    Vexora:Destroy()
+end)
+
+--// THEME UPDATE FOR EXISTING WIDGETS
+-- Widget colors that are not registered dynamically will keep their initial colors.
+-- Rebuild the interface after a theme change if you add custom widgets with hard-coded colors.
+
+--// OPEN / CLOSE
+local function openPanel()
+    if Vexora.Destroyed then return end
+    Main.Visible = true
+    MainScale.Scale = 0.94
+    tween(MainScale, 0.2, { Scale = 1 })
+end
+
+local function closePanel()
+    if Vexora.Destroyed then return end
+    tween(MainScale, 0.15, { Scale = 0.94 })
+    task.delay(0.15, function()
+        if Main and Main.Parent then Main.Visible = false end
+    end)
+end
+
+Vexora:Connect(CloseButton.MouseButton1Click, closePanel)
+Vexora:Connect(FloatingButton.MouseButton1Click, function()
+    if Main.Visible then closePanel() else openPanel() end
+end)
+Vexora:Connect(UserInputService.InputBegan, function(input, processed)
+    if processed then return end
+    if input.KeyCode == CONFIG.ToggleKey then
+        if Main.Visible then closePanel() else openPanel() end
+    end
+end)
+
+--// CLEAN TEARDOWN
+function Vexora:Destroy()
+    if self.Destroyed then return end
+    self.Destroyed = true
+    self:DisconnectBucket(self.Connections)
+    for _, tab in pairs(self.Tabs) do
+        if tab and tab.Destroy then pcall(function() tab:Destroy() end) end
+    end
+    for i = #self.CleanupTasks, 1, -1 do
+        pcall(self.CleanupTasks[i])
+        self.CleanupTasks[i] = nil
+    end
+    if ScreenGui and ScreenGui.Parent then
+        ScreenGui:Destroy()
+    end
+end
+
+--// INTRO
+local Intro = create("Frame", {
+    BackgroundColor3 = Vexora.Theme.Background,
+    Size = UDim2.fromScale(1, 1),
+    ZIndex = 20,
+}, ScreenGui)
+local introTitle = makeLabel(Intro, "VEXORA", 28, Vexora.Theme.Text, Enum.Font.GothamBold)
+introTitle.TextXAlignment = Enum.TextXAlignment.Center
+introTitle.AnchorPoint = Vector2.new(0.5, 0.5)
+introTitle.Position = UDim2.fromScale(0.5, 0.46)
+introTitle.Size = UDim2.new(1, 0, 0, 40)
+introTitle.ZIndex = 21
+local introSub = makeLabel(Intro, "PROJECT REAL  •  INITIALIZING", 10, Vexora.Theme.Muted)
+introSub.TextXAlignment = Enum.TextXAlignment.Center
+introSub.AnchorPoint = Vector2.new(0.5, 0.5)
+introSub.Position = UDim2.fromScale(0.5, 0.54)
+introSub.Size = UDim2.new(1, 0, 0, 24)
+introSub.ZIndex = 21
+
+task.delay(1.1, function()
+    if not Intro.Parent then return end
+    tween(Intro, 0.25, { BackgroundTransparency = 1 })
+    tween(introTitle, 0.2, { TextTransparency = 1 })
+    tween(introSub, 0.2, { TextTransparency = 1 })
+    task.wait(0.28)
+    if Intro.Parent then Intro:Destroy() end
+    openPanel()
+    Vexora:Notify("Vexora initialized successfully.", "success")
+end)
+
+--// OPTIONAL API FOR YOUR OWN EXPERIENCE
+-- Expose only to other trusted LocalScripts in the same client environment.
+-- Do not treat this client-side table as an authorization mechanism.
+_G.VexoraProjectReal = Vexora
+
+print("[VEXORA] Project Real loaded for", LocalPlayer.Name, "in", gameName)
